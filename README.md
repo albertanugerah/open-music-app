@@ -1,1 +1,1 @@
-# openmusik-app-v1
+# openmusik-app
