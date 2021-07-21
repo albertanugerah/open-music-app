@@ -20,11 +20,20 @@ const authentications = require('./api/authentications');
 const AuthenticationsService = require('./services/postgres/AuthenticationsService');
 const TokenManager = require('./tokenize/TokenManager');
 const AuthenticationsValidator = require('./validator/authentications');
+const NotFoundError = require('./exceptions/NotFoundError');
+const AuthenticationError = require('./exceptions/AuthenticationsError');
+const AuthorizationError = require('./exceptions/AuthorizationError');
+
+// playlist
+const playlists = require('./api/playlists');
+const PlaylistsService = require('./services/postgres/PlaylistsService');
+const PlaylistsValidator = require('./validator/playlists');
 
 const init = async () => {
   const songsService = new SongsService();
   const usersService = new UsersService();
   const authenticationsService = new AuthenticationsService();
+  const playlistsService = new PlaylistsService();
 
   const server = Hapi.server({
     port: process.env.PORT,
@@ -68,6 +77,13 @@ const init = async () => {
       },
     },
     {
+      plugin: playlists,
+      options: {
+        service: playlistsService,
+        validator: PlaylistsValidator,
+      },
+    },
+    {
       plugin: users,
       options: {
         service: usersService,
@@ -98,6 +114,31 @@ const init = async () => {
       newResponse.code(response.statusCode);
       return newResponse;
     }
+    if (response instanceof NotFoundError) {
+      const newResponse = h.response({
+        status: 'fail',
+        message: response.message,
+      });
+      newResponse.code(response.statusCode);
+      return newResponse;
+    }
+    if (response instanceof AuthenticationError) {
+      const newResponse = h.response({
+        status: 'fail',
+        message: response.message,
+      });
+      newResponse.code(response.statusCode);
+      return newResponse;
+    }
+    if (response instanceof AuthorizationError) {
+      const newResponse = h.response({
+        status: 'fail',
+        message: response.message,
+      });
+      newResponse.code(response.statusCode);
+      return newResponse;
+    }
+
     // Server ERROR!
     const newResponse = h.response({
       status: 'error',
@@ -105,7 +146,7 @@ const init = async () => {
     });
     newResponse.code(500);
 
-    // jika bukan ClientError, lanjutkan degan repsonse sebelumnya (tanpa intervensi)
+    // jika bukan ClientError, lanjutkan dengan repsonse sebelumnya (tanpa intervensi)
     return response.continue || response;
   });
 
