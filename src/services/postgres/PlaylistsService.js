@@ -5,9 +5,10 @@ const InvariantError = require('../../exceptions/InvariantError');
 const NotFoundError = require('../../exceptions/NotFoundError');
 
 class PlaylistsService {
-  constructor(collaborationService) {
+  constructor(collaborationService, cacheService) {
     this._pool = new Pool();
     this._collaborationService = collaborationService;
+    this._cacheService = cacheService;
   }
 
   async addPlaylist({ name, owner }) {
@@ -23,21 +24,29 @@ class PlaylistsService {
     if (!result.rows[0].id) {
       throw new InvariantError('Playlist gagal ditambahkan');
     }
+    await this._cacheService.delete(`playlists:${owner}`);
 
     return result.rows[0].id;
   }
 
   async getPlaylists(owner) {
-    const query = {
-      text: `SELECT playlists.id, playlists.name, users.username FROM playlists
+    try {
+      // mendapatkan playlists dari cache
+      const result = await this._cacheService.get(`playlists:${owner}`);
+      return JSON.parse(result);
+    } catch (error) {
+      // bila gagal, diteruskan dengan mendapatkan playlists dari database
+      const query = {
+        text: `SELECT playlists.id, playlists.name, users.username FROM playlists
             LEFT JOIN users on users.id = playlists.owner
             LEFT JOIN collaborations ON playlists.id = collaborations.playlist_id  
             WHERE playlists.owner = $1 OR collaborations.user_id = $1`,
-      values: [owner],
-    };
-
-    const result = await this._pool.query(query);
-    return result.rows;
+        values: [owner],
+      };
+      const result = await this._pool.query(query);
+      await this._cacheService.set(`playlists:${owner}`, JSON.stringify(result.rows));
+      return result.rows;
+    }
   }
 
   async verifyPlaylistOwner(id, owner) {
@@ -69,6 +78,8 @@ class PlaylistsService {
     if (!result.rowCount) {
       throw new NotFoundError('Playlist gagal dihapus. Id tidak ditemukan');
     }
+    const { owner } = result.rows[0];
+    await this._cacheService.delete(`playlists:${owner}`);
   }
 
   async verifyPlaylistAccess(playlistId, userId) {
