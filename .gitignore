@@ -1,3 +1,4 @@
 node_modules
 src/api/uploads/file
 .env
+.env copy
